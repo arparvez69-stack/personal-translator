@@ -190,12 +190,39 @@ async function renderPaste() {
   };
   document.getElementById("paste-clear-btn").onclick = () => { input.value = ""; updateStats(); };
 
+  const langSelect = document.getElementById("paste-source-lang");
+  const customLangInput = document.getElementById("paste-source-lang-custom");
+  if (langSelect && customLangInput) {
+    langSelect.onchange = () => {
+      customLangInput.style.display = langSelect.value === "custom" ? "block" : "none";
+      if (langSelect.value === "custom") customLangInput.focus();
+    };
+  }
+
   document.getElementById("paste-translate-btn").onclick = async () => {
     const text = input.value.trim();
     if (!text) { toast("Paste some text first."); return; }
     if (!select.value) { toast("Choose or create a project first."); return; }
     const project = await Projects.get(select.value);
-    const sourceLang = document.getElementById("paste-source-lang").value.trim() || "English";
+
+    let sourceLang = langSelect ? langSelect.value : "English";
+    if (sourceLang === "custom" && customLangInput) {
+      sourceLang = customLangInput.value.trim() || "English";
+    }
+
+    const currentKey = Settings.get().apiKey;
+    if (!currentKey) {
+      const openSettings = await confirmModal(
+        "Gemini API Key Required (100% Free)",
+        "Translation requires a Gemini API key. Google provides free Gemini keys at aistudio.google.com with no payment or credit card required.\n\nWould you like to open Settings now to paste your key?",
+        "Open Settings"
+      );
+      if (openSettings) {
+        nav("settings");
+        return;
+      }
+    }
+
     await runTranslation({
       text, projectId: project.id, sourceLang, targetLang: project.targetLang, mode: project.mode,
       progressWrap: "paste-progress", progressFill: "paste-progress-fill", progressText: "paste-progress-text",
@@ -244,9 +271,28 @@ async function renderUrl(params) {
     const text = document.getElementById("url-extracted-text").value.trim();
     if (!text) { toast("No extracted text to translate."); return; }
     const project = await Projects.get(select.value);
+
+    const currentKey = Settings.get().apiKey;
+    if (!currentKey) {
+      const openSettings = await confirmModal(
+        "Gemini API Key Required (100% Free)",
+        "Translation requires a Gemini API key. Google provides free Gemini keys at aistudio.google.com with no payment or credit card required.\n\nWould you like to open Settings now to paste your key?",
+        "Open Settings"
+      );
+      if (openSettings) {
+        nav("settings");
+        return;
+      }
+    }
+
+    const urlLangSelect = document.getElementById("url-source-lang");
+    const sourceLang = (urlLangSelect && urlLangSelect.value !== "Auto-detect")
+      ? urlLangSelect.value
+      : (urlState.extracted?.language || "English");
+
     document.getElementById("url-preview").hidden = true;
     await runTranslation({
-      text, projectId: project.id, sourceLang: urlState.extracted?.language || "Unknown",
+      text, projectId: project.id, sourceLang,
       targetLang: project.targetLang, mode: project.mode,
       progressWrap: "url-progress", progressFill: "url-progress-fill", progressText: "url-progress-text",
       resultWrap: "url-result", originalView: "url-original-view", translationView: "url-translation-view",
@@ -354,13 +400,11 @@ async function runTranslation({ text, projectId, sourceLang, targetLang, mode, p
   const glossary = (await TM.listByProject(projectId)).map((t) => ({ term: t.term, translation: t.translation, notes: t.notes }));
   const chunks = chunkText(text, s.chunkSize);
 
-  const wrap = document.getElementById(progressWrap);
-  const fill = document.getElementById(progressFill);
-  const txt = document.getElementById(progressText);
-  wrap.hidden = false;
-  document.getElementById(resultWrap).hidden = true;
+  const resWrapEl = document.getElementById(resultWrap);
+  // Clear any previous error/retry messages
+  resWrapEl.querySelectorAll(".status-msg.error").forEach((el) => el.remove());
 
-  const { results, failedIndices } = await translateChunks(chunks, { mode, sourceLang, targetLang, glossary }, (p) => {
+  const { results, failedIndices, lastError } = await translateChunks(chunks, { mode, sourceLang, targetLang, glossary }, (p) => {
     const pct = Math.round(((p.index + (p.status === "done" || p.status === "failed" ? 1 : 0)) / p.total) * 100);
     fill.style.width = pct + "%";
     txt.textContent = p.status === "failed"
@@ -370,10 +414,24 @@ async function runTranslation({ text, projectId, sourceLang, targetLang, mode, p
 
   wrap.hidden = true;
 
+  if (failedIndices.length === chunks.length) {
+    const errText = lastError || "Translation failed";
+    const isKeyIssue = /key|denied|permission|403|unauthorized/i.test(errText);
+    const goSettings = await confirmModal(
+      "Translation Failed",
+      `${errText}\n\n${isKeyIssue ? "A Gemini API key is needed. You can get one 100% free with no credit card required at aistudio.google.com." : "Please check your network and try again."}`,
+      isKeyIssue ? "Open Settings" : "OK"
+    );
+    if (goSettings && isKeyIssue) {
+      nav("settings");
+    }
+    return;
+  }
+
   if (failedIndices.length) {
     const proceed = await confirmModal(
       "Some chunks failed",
-      `${failedIndices.length} of ${chunks.length} chunk(s) failed to translate. You can retry them individually. Continue with the partial result for now?`,
+      `${failedIndices.length} of ${chunks.length} chunk(s) failed to translate (${lastError || ""}). Continue with the partial result for now?`,
       "Continue"
     );
     if (!proceed) return;
@@ -389,15 +447,26 @@ async function runTranslation({ text, projectId, sourceLang, targetLang, mode, p
   document.getElementById(originalView).textContent = text;
   document.getElementById(translationView).textContent = joinedTranslation;
   document.getElementById(dualPane).dataset.mode = "both";
-  document.getElementById(resultWrap).hidden = false;
+  resWrapEl.hidden = false;
 
   if (failedIndices.length) {
     const retryBar = document.createElement("div");
     retryBar.className = "status-msg error";
-    retryBar.textContent = `${failedIndices.length} chunk(s) failed. `;
-    const btn = document.createElement("button");
-    btn.className = "small-btn"; btn.textContent = "Retry Failed Chunk(s)";
-    btn.onclick = async () => {
+    retryBar.style.display = "flex";
+    retryBar.style.alignItems = "center";
+    retryBar.style.justifyContent = "space-between";
+    retryBar.style.flexWrap = "wrap";
+    retryBar.style.gap = "8px";
+    retryBar.innerHTML = `<span><b>${failedIndices.length} chunk(s) failed:</b> ${escapeHtml(lastError || "Could not complete translation")}</span>`;
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "6px";
+
+    const retryBtn = document.createElement("button");
+    retryBtn.className = "small-btn";
+    retryBtn.textContent = "Retry Failed Chunk(s)";
+    retryBtn.onclick = async () => {
       for (const idx of [...failedIndices]) {
         try {
           const r = await retryChunk(chunks, idx, { mode, sourceLang, targetLang, glossary });
@@ -408,8 +477,16 @@ async function runTranslation({ text, projectId, sourceLang, targetLang, mode, p
       document.getElementById(translationView).textContent = results.map((r) => r ?? "[chunk failed — retry needed]").join("\n\n");
       if (!failedIndices.length) { retryBar.remove(); toast("All chunks translated."); }
     };
-    retryBar.appendChild(btn);
-    document.getElementById(resultWrap).prepend(retryBar);
+    actions.appendChild(retryBtn);
+
+    const setBtn = document.createElement("button");
+    setBtn.className = "small-btn";
+    setBtn.textContent = "Settings (⚙️)";
+    setBtn.onclick = () => nav("settings");
+    actions.appendChild(setBtn);
+
+    retryBar.appendChild(actions);
+    resWrapEl.prepend(retryBar);
   }
 }
 
@@ -772,8 +849,8 @@ async function renderSettings() {
       targetLang: document.getElementById("set-target-lang").value.trim() || "Bangla",
       defaultMode: document.getElementById("set-default-mode").value,
       chunkSize: Math.max(500, Math.min(8000, +document.getElementById("set-chunk-size").value || 2800)),
-      apiBase: document.getElementById("set-api-base").value.trim() || "https://api.anthropic.com",
-      apiModel: document.getElementById("set-api-model").value.trim() || "claude-sonnet-4-6",
+      apiBase: document.getElementById("set-api-base").value.trim(),
+      apiModel: document.getElementById("set-api-model").value.trim(),
       apiKey: document.getElementById("set-api-key").value.trim(),
       extractProxy: document.getElementById("set-extract-proxy").value.trim(),
       fontSize: +document.getElementById("set-font-size").value || 19,

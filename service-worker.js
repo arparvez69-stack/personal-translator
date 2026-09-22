@@ -36,8 +36,8 @@ self.addEventListener("fetch", (event) => {
   const isSameOrigin = url.origin === self.location.origin;
   const isShellFile = isSameOrigin && SHELL_FILES.some((f) => url.pathname.endsWith(f.replace("./", "/")) || url.pathname === "/" );
 
-  if (!isSameOrigin) {
-    // Never intercept cross-origin requests (AI API calls, webpage extraction fetches).
+  if (!isSameOrigin || url.pathname.startsWith("/api/")) {
+    // Never intercept API calls or cross-origin requests
     return;
   }
 

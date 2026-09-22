@@ -45,22 +45,33 @@ app.post("/api/translate", async (req, res) => {
 
     // 1. If user provided their own custom API key in Settings, use it
     if (customApiKey && customApiKey.trim()) {
+      const key = customApiKey.trim();
       const base = (customApiBase || "").trim().replace(/\/+$/, "");
-      const isGoogle = customApiKey.startsWith("AIzaSy") || base.includes("generativelanguage.googleapis.com");
-      const isAnthropic = base.includes("anthropic.com") || (!base && customApiKey.startsWith("sk-ant"));
+      const isAnthropic = base.includes("anthropic.com") || (!base && key.startsWith("sk-ant"));
+      const isOpenAI = base.includes("openai.com") || base.includes("openrouter.ai") || base.includes("groq.com") || (!base && key.startsWith("sk-") && !key.startsWith("sk-ant"));
+      const isGoogle = key.startsWith("AIza") || base.includes("generativelanguage.googleapis.com") || (!isAnthropic && !isOpenAI);
 
       if (isGoogle) {
-        const customAi = new GoogleGenAI({
-          apiKey: customApiKey.trim(),
-          httpOptions: { headers: { "User-Agent": "aistudio-build" } }
-        });
-        const response = await customAi.models.generateContent({
-          model: customModel || "gemini-3.8-flash",
-          contents: text,
-          config: { systemInstruction: systemPrompt }
-        });
-        const translatedText = response.text ? response.text.trim() : "";
-        return res.json({ text: translatedText, provider: "custom-gemini" });
+        try {
+          const customAi = new GoogleGenAI({
+            apiKey: key,
+            httpOptions: { headers: { "User-Agent": "aistudio-build" } }
+          });
+          const response = await customAi.models.generateContent({
+            model: customModel || "gemini-3.8-flash",
+            contents: text,
+            config: { systemInstruction: systemPrompt }
+          });
+          const translatedText = response.text ? response.text.trim() : "";
+          return res.json({ text: translatedText, provider: "custom-gemini" });
+        } catch (gErr) {
+          let msg = gErr?.message || "Google Gemini API error.";
+          try {
+            const parsed = JSON.parse(msg);
+            if (parsed?.error?.message) msg = parsed.error.message;
+          } catch {}
+          return res.status(400).json({ error: { message: `Gemini API Error: ${msg}` } });
+        }
       }
 
       if (isAnthropic) {

@@ -146,6 +146,7 @@ async function translateChunks(chunks, opts, onProgress) {
   const systemPrompt = buildSystemPrompt(opts);
   const results = new Array(chunks.length).fill(null);
   const failedIndices = [];
+  let lastError = null;
   for (let i = 0; i < chunks.length; i++) {
     onProgress?.({ index: i, total: chunks.length, status: "translating" });
     if (SCENE_BREAK_RE.test(chunks[i])) {
@@ -157,11 +158,12 @@ async function translateChunks(chunks, opts, onProgress) {
       results[i] = await callModel(systemPrompt, chunks[i]);
       onProgress?.({ index: i, total: chunks.length, status: "done" });
     } catch (err) {
+      lastError = err.message;
       failedIndices.push(i);
       onProgress?.({ index: i, total: chunks.length, status: "failed", error: err.message });
     }
   }
-  return { results, failedIndices };
+  return { results, failedIndices, lastError };
 }
 
 async function retryChunk(chunks, index, opts) {

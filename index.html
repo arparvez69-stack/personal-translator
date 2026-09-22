@@ -88,8 +88,28 @@
         <button class="small-btn" id="paste-new-project">+ New</button>
       </div>
       <div class="field-row">
-        <label>Source language</label>
-        <input id="paste-source-lang" value="English" placeholder="e.g. English, Malayalam">
+        <label for="paste-source-lang">Source language</label>
+        <select id="paste-source-lang">
+          <option value="English" selected>English (ইংরেজি)</option>
+          <option value="Auto-detect">Auto-detect (স্বয়ংক্রিয়)</option>
+          <option value="Japanese">Japanese (জাপানি - 日本語)</option>
+          <option value="Chinese">Chinese (চীনা - 中文)</option>
+          <option value="Korean">Korean (কোরিয়ান - 한국어)</option>
+          <option value="Spanish">Spanish (স্প্যানিশ - Español)</option>
+          <option value="French">French (ফরাসি - Français)</option>
+          <option value="German">German (জার্মান - Deutsch)</option>
+          <option value="Russian">Russian (রুশ - Русский)</option>
+          <option value="Arabic">Arabic (আরবি - العربية)</option>
+          <option value="Hindi">Hindi (হিন্দি - हिन्दी)</option>
+          <option value="Urdu">Urdu (উর্দু - اردو)</option>
+          <option value="Turkish">Turkish (তুর্কি - Türkçe)</option>
+          <option value="Portuguese">Portuguese (পর্তুগিজ)</option>
+          <option value="Italian">Italian (ইতালীয়)</option>
+          <option value="Malayalam">Malayalam (মালয়ালম)</option>
+          <option value="Tamil">Tamil (তামিল)</option>
+          <option value="custom">Other / Custom language…</option>
+        </select>
+        <input id="paste-source-lang-custom" placeholder="Type language name (e.g. Italian, Thai)…" style="display:none;margin-top:6px;">
       </div>
       <textarea id="paste-input" placeholder="Paste your source text here…" spellcheck="false"></textarea>
       <div class="stats-row" id="paste-stats">0 characters · 0 words · ~0 chunks</div>
@@ -154,6 +174,26 @@
           <div><span>Characters</span><b id="url-meta-chars">—</b></div>
           <div><span>Words</span><b id="url-meta-words">—</b></div>
           <div><span>Est. chunks</span><b id="url-meta-chunks">—</b></div>
+        </div>
+        <div class="field-row" style="margin: 8px 0;">
+          <label for="url-source-lang">Source language</label>
+          <select id="url-source-lang">
+            <option value="Auto-detect" selected>Auto-detect from page</option>
+            <option value="English">English (ইংরেজি)</option>
+            <option value="Japanese">Japanese (জাপানি - 日本語)</option>
+            <option value="Chinese">Chinese (চীনা - 中文)</option>
+            <option value="Korean">Korean (কোরিয়ান - 한국어)</option>
+            <option value="Spanish">Spanish (স্প্যানিশ - Español)</option>
+            <option value="French">French (ফরাসি - Français)</option>
+            <option value="German">German (জার্মান - Deutsch)</option>
+            <option value="Russian">Russian (রুশ - Русский)</option>
+            <option value="Arabic">Arabic (আরবি - العربية)</option>
+            <option value="Hindi">Hindi (হিন্দি - हिन्दी)</option>
+            <option value="Urdu">Urdu (উর্দু - اردو)</option>
+            <option value="Turkish">Turkish (তুর্কি - Türkçe)</option>
+            <option value="Portuguese">Portuguese (পর্তুগিজ)</option>
+            <option value="Italian">Italian (ইতালীয়)</option>
+          </select>
         </div>
         <textarea id="url-extracted-text" spellcheck="false"></textarea>
         <div class="btn-row">
@@ -281,14 +321,23 @@
       </div>
 
       <div class="settings-group">
-        <h3>AI Engine</h3>
-        <p class="hint">The built-in Gemini AI engine translates novels into natural Bangla. Custom provider settings below are optional.</p>
-        <label>API base URL (optional)</label>
-        <input id="set-api-base" placeholder="https://api.anthropic.com">
-        <label>Model (optional)</label>
-        <input id="set-api-model" placeholder="claude-sonnet-4-6">
-        <label>Custom API key (optional)</label>
-        <input id="set-api-key" type="password" placeholder="Leave empty for built-in Gemini engine">
+        <h3>AI Translation Key (100% Free)</h3>
+        <p class="hint">To translate fiction and novels, enter your free Gemini API key below. You can generate a free key in 10 seconds with zero payment or credit card required from Google AI Studio.</p>
+        <div style="margin: 8px 0 14px;">
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="primary-btn" style="display:inline-block;text-align:center;text-decoration:none;font-size:13px;padding:8px 16px;">🔑 Get Free Gemini Key (aistudio.google.com) ↗</a>
+        </div>
+        <label for="set-api-key">Gemini API Key</label>
+        <input id="set-api-key" type="password" placeholder="Paste AIzaSy… key here">
+
+        <details style="margin-top:14px;font-size:13px;color:var(--ink-soft);">
+          <summary style="cursor:pointer;font-weight:500;padding:4px 0;">Optional / Advanced Providers (Claude, OpenAI, Custom)</summary>
+          <div style="margin-top:8px;">
+            <label for="set-api-base">API base URL</label>
+            <input id="set-api-base" placeholder="https://api.anthropic.com or custom">
+            <label for="set-api-model">Model name</label>
+            <input id="set-api-model" placeholder="claude-sonnet-4-6 or gpt-4o">
+          </div>
+        </details>
       </div>
 
       <div class="settings-group">
