@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#F7F1E6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bangla Translator">
+<title>Literary Translator</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-theme="light">
+
+<div id="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <button class="icon-btn" id="btn-back" aria-label="Back" hidden>&#8592;</button>
+    <h1 id="view-title">Literary Translator</h1>
+    <span class="status-pill" id="status-pill">●</span>
+  </header>
+
+  <main id="view-root"></main>
+
+  <!-- Templates for each view, cloned into #view-root -->
+
+  <template id="tpl-home">
+    <section class="view view-home">
+      <div class="hero-card">
+        <h2>বাংলা</h2>
+        <p>Translate fiction into natural, emotionally faithful Bangla — fully offline-capable, private by default.</p>
+      </div>
+
+      <div class="grid-actions">
+        <button class="action-tile" data-nav="paste">
+          <span class="tile-icon">📋</span>
+          <span>Paste Text</span>
+        </button>
+        <button class="action-tile" data-nav="url">
+          <span class="tile-icon">🔗</span>
+          <span>Translate Webpage</span>
+        </button>
+        <button class="action-tile" data-nav="projects">
+          <span class="tile-icon">📚</span>
+          <span>My Projects</span>
+        </button>
+        <button class="action-tile" data-nav="reading">
+          <span class="tile-icon">📖</span>
+          <span>Reading Mode</span>
+        </button>
+        <button class="action-tile" data-nav="memory">
+          <span class="tile-icon">🗂️</span>
+          <span>Translation Memory</span>
+        </button>
+        <button class="action-tile" data-nav="settings">
+          <span class="tile-icon">⚙️</span>
+          <span>Settings</span>
+        </button>
+      </div>
+
+      <div class="section-block">
+        <h3>Recent Projects</h3>
+        <div id="home-recent-projects" class="list"></div>
+      </div>
+
+      <div class="section-block">
+        <h3>Recent Pages</h3>
+        <div id="home-recent-pages" class="list"></div>
+      </div>
+
+      <div class="section-block storage-block">
+        <span id="storage-usage">Storage: —</span>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-paste">
+    <section class="view view-paste">
+      <div class="field-row">
+        <label>Project</label>
+        <select id="paste-project"></select>
+        <button class="small-btn" id="paste-new-project">+ New</button>
+      </div>
+      <div class="field-row">
+        <label>Source language</label>
+        <input id="paste-source-lang" value="English" placeholder="e.g. English, Malayalam">
+      </div>
+      <textarea id="paste-input" placeholder="Paste your source text here…" spellcheck="false"></textarea>
+      <div class="stats-row" id="paste-stats">0 characters · 0 words · ~0 chunks</div>
+      <div class="btn-row">
+        <button class="ghost-btn" id="paste-btn">Paste</button>
+        <button class="ghost-btn" id="paste-clear-btn">Clear</button>
+        <button class="primary-btn" id="paste-translate-btn">Translate</button>
+      </div>
+
+      <div id="paste-progress" class="progress-block" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="paste-progress-fill"></div></div>
+        <div id="paste-progress-text">Translating…</div>
+      </div>
+
+      <div id="paste-result" class="result-block" hidden>
+        <div class="tab-row">
+          <button class="tab-btn active" data-tab="both">Both</button>
+          <button class="tab-btn" data-tab="original">Original</button>
+          <button class="tab-btn" data-tab="translation">Translation</button>
+        </div>
+        <div class="dual-pane" id="paste-dual-pane">
+          <div class="pane" data-pane="original">
+            <div class="pane-head">Original <button class="mini-btn" data-copy="original">Copy</button></div>
+            <div class="pane-body" id="paste-original-view"></div>
+          </div>
+          <div class="pane" data-pane="translation">
+            <div class="pane-head">Bangla Translation <button class="mini-btn" data-copy="translation">Copy</button></div>
+            <div class="pane-body" id="paste-translation-view"></div>
+          </div>
+        </div>
+        <div class="btn-row wrap">
+          <button class="ghost-btn" id="paste-save-separate">Save as Separate Part</button>
+          <button class="ghost-btn" id="paste-merge-prev">Merge with Previous</button>
+          <button class="danger-btn" id="paste-discard">Discard</button>
+        </div>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-url">
+    <section class="view view-url">
+      <div class="field-row">
+        <label>Project</label>
+        <select id="url-project"></select>
+        <button class="small-btn" id="url-new-project">+ New</button>
+      </div>
+      <div class="field-row">
+        <label>Webpage URL</label>
+        <input id="url-input" type="url" placeholder="https://example.com/chapter-1" inputmode="url">
+      </div>
+      <div class="btn-row">
+        <button class="primary-btn" id="url-load-btn">Load Page</button>
+      </div>
+
+      <div id="url-status" class="status-msg" hidden></div>
+
+      <div id="url-preview" class="preview-block" hidden>
+        <div class="meta-grid">
+          <div><span>Title</span><b id="url-meta-title">—</b></div>
+          <div><span>Source</span><b id="url-meta-source">—</b></div>
+          <div><span>Language</span><b id="url-meta-lang">—</b></div>
+          <div><span>Characters</span><b id="url-meta-chars">—</b></div>
+          <div><span>Words</span><b id="url-meta-words">—</b></div>
+          <div><span>Est. chunks</span><b id="url-meta-chunks">—</b></div>
+        </div>
+        <textarea id="url-extracted-text" spellcheck="false"></textarea>
+        <div class="btn-row">
+          <button class="primary-btn" id="url-translate-btn">Translate</button>
+          <button class="ghost-btn" id="url-cancel-btn">Cancel</button>
+        </div>
+      </div>
+
+      <div id="url-progress" class="progress-block" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="url-progress-fill"></div></div>
+        <div id="url-progress-text">Translating…</div>
+      </div>
+
+      <div id="url-result" class="result-block" hidden>
+        <div class="tab-row">
+          <button class="tab-btn active" data-tab="both">Both</button>
+          <button class="tab-btn" data-tab="original">Original</button>
+          <button class="tab-btn" data-tab="translation">Translation</button>
+        </div>
+        <div class="dual-pane" id="url-dual-pane">
+          <div class="pane" data-pane="original">
+            <div class="pane-head">Original <button class="mini-btn" data-copy="original">Copy</button></div>
+            <div class="pane-body" id="url-original-view"></div>
+          </div>
+          <div class="pane" data-pane="translation">
+            <div class="pane-head">Bangla Translation <button class="mini-btn" data-copy="translation">Copy</button></div>
+            <div class="pane-body" id="url-translation-view"></div>
+          </div>
+        </div>
+        <div class="btn-row wrap">
+          <button class="ghost-btn" id="url-read-now">Read Now</button>
+          <button class="ghost-btn" id="url-save-separate">Save as Separate Part</button>
+          <button class="ghost-btn" id="url-merge-prev">Merge with Previous</button>
+          <button class="danger-btn" id="url-discard">Discard</button>
+        </div>
+        <div id="url-next-chapter" class="next-chapter-block" hidden></div>
+      </div>
+
+      <div class="section-block">
+        <h3>Recent Pages</h3>
+        <div id="url-recent-list" class="list"></div>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-projects">
+    <section class="view view-projects">
+      <div class="field-row">
+        <input id="project-search" placeholder="Search projects, parts, text…">
+      </div>
+      <div class="btn-row">
+        <button class="primary-btn" id="project-create-btn">+ New Project</button>
+      </div>
+      <div id="projects-list" class="list"></div>
+    </section>
+  </template>
+
+  <template id="tpl-project-detail">
+    <section class="view view-project-detail">
+      <div class="project-head">
+        <h2 id="pd-name">Project</h2>
+        <div class="btn-row">
+          <select id="pd-mode-select">
+            <option value="literary">Literary</option>
+            <option value="faithful">Faithful</option>
+            <option value="immersive">Immersive Dialogue</option>
+          </select>
+          <button class="ghost-btn" id="pd-export-btn">Export</button>
+          <button class="ghost-btn" id="pd-import-btn">Import</button>
+          <button class="danger-btn" id="pd-delete-btn">Delete Project</button>
+        </div>
+      </div>
+      <div id="pd-parts-list" class="list parts-list"></div>
+    </section>
+  </template>
+
+  <template id="tpl-reading">
+    <section class="view view-reading">
+      <div class="field-row">
+        <label>Project</label>
+        <select id="reading-project"></select>
+        <label>Part</label>
+        <select id="reading-part"></select>
+      </div>
+      <div class="reading-controls">
+        <button class="small-btn" id="reading-font-minus">A-</button>
+        <button class="small-btn" id="reading-font-plus">A+</button>
+        <button class="small-btn" id="reading-line-minus">↕-</button>
+        <button class="small-btn" id="reading-line-plus">↕+</button>
+        <button class="small-btn" id="reading-theme-toggle">☀/☾</button>
+      </div>
+      <article id="reading-content" class="reading-content"></article>
+      <div class="btn-row">
+        <button class="ghost-btn" id="reading-prev">◀ Previous Part</button>
+        <button class="ghost-btn" id="reading-next">Next Part ▶</button>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-memory">
+    <section class="view view-memory">
+      <div class="field-row">
+        <label>Project</label>
+        <select id="tm-project"></select>
+        <button class="small-btn" id="tm-add-btn">+ Add Term</button>
+      </div>
+      <div id="tm-list" class="list"></div>
+    </section>
+  </template>
+
+  <template id="tpl-settings">
+    <section class="view view-settings">
+      <div class="settings-group">
+        <h3>Translation</h3>
+        <label>Default target language</label>
+        <input id="set-target-lang" value="Bangla">
+        <label>Default mode</label>
+        <select id="set-default-mode">
+          <option value="literary">Literary</option>
+          <option value="faithful">Faithful</option>
+          <option value="immersive">Immersive Dialogue</option>
+        </select>
+        <label>Chunk size (characters)</label>
+        <input id="set-chunk-size" type="number" min="500" max="8000" step="100">
+      </div>
+
+      <div class="settings-group">
+        <h3>AI Provider</h3>
+        <p class="hint">Your API key is stored only in this browser's local storage and sent directly to the provider. It is never bundled into the app or sent anywhere else.</p>
+        <label>API base URL</label>
+        <input id="set-api-base" placeholder="https://api.anthropic.com">
+        <label>Model</label>
+        <input id="set-api-model" placeholder="claude-sonnet-4-6">
+        <label>API key</label>
+        <input id="set-api-key" type="password" placeholder="sk-ant-…">
+      </div>
+
+      <div class="settings-group">
+        <h3>Webpage Extraction</h3>
+        <p class="hint">Most sites block cross-origin browser access (CORS) — this is a browser security feature the app will never try to bypass. If a page fails to load automatically, use Paste Mode instead. If you run your own extraction server that you're authorized to use, you can point to it here as an optional fallback.</p>
+        <label>Extraction proxy URL (optional)</label>
+        <input id="set-extract-proxy" placeholder="https://your-own-server.example/extract">
+      </div>
+
+      <div class="settings-group">
+        <h3>Reading &amp; Display</h3>
+        <label>Font size (px)</label>
+        <input id="set-font-size" type="number" min="14" max="32">
+        <label>Line spacing</label>
+        <input id="set-line-spacing" type="number" min="1.2" max="2.4" step="0.1">
+        <label>Theme</label>
+        <select id="set-theme">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+
+      <div class="settings-group">
+        <h3>Behavior</h3>
+        <label class="switch-row"><input type="checkbox" id="set-autosave"> Auto-save</label>
+        <label class="switch-row"><input type="checkbox" id="set-confirm-delete"> Confirm before delete</label>
+      </div>
+
+      <div class="settings-group">
+        <h3>Data</h3>
+        <div class="btn-row wrap">
+          <button class="ghost-btn" id="set-export-all">Export All Data (JSON)</button>
+          <button class="ghost-btn" id="set-import-all">Import Data (JSON)</button>
+          <button class="danger-btn" id="set-clear-all">Clear All Local Data</button>
+        </div>
+      </div>
+
+      <button class="primary-btn" id="set-save-btn">Save Settings</button>
+    </section>
+  </template>
+
+</div>
+
+<div id="toast-root"></div>
+<div id="modal-root"></div>
+<input type="file" id="hidden-file-input" accept="application/json" hidden>
+
+<script src="app.js"></script>
+<script src="translation.js"></script>
+<script src="extraction.js"></script>
+<script src="data.js"></script>
+<script src="ui.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
