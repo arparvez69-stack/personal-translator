@@ -73,6 +73,54 @@ function formModal(title, fields) {
   });
 }
 
+function promptKeySetupModal() {
+  return new Promise((resolve) => {
+    const root = document.getElementById("modal-root");
+    root.innerHTML = `<div class="modal-sheet">
+      <h3 style="margin-top:0;">🔑 Setup Free Gemini Key</h3>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.5;margin:8px 0 12px;">
+        Novels are translated into natural literary Bangla using Google Gemini. A Gemini API key is <b>100% free with zero payment or credit card required</b> from Google AI Studio.
+      </p>
+      <div style="margin: 0 0 14px;">
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="primary-btn" style="display:inline-block;text-decoration:none;font-size:13px;padding:8px 14px;">
+          Get Free Key (aistudio.google.com) ↗
+        </a>
+      </div>
+      <label style="display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;">Paste API Key (starts with AIzaSy...):</label>
+      <input id="quick-key-input" type="password" placeholder="AIzaSy..." style="width:100%;font-size:15px;margin-bottom:8px;" value="${escapeHtml(Settings.get().apiKey || "")}">
+      <div id="quick-key-error" style="color:var(--danger);font-size:12px;display:none;margin-bottom:8px;"></div>
+      <div class="btn-row">
+        <button class="ghost-btn" id="quick-key-cancel">Cancel</button>
+        <button class="primary-btn" id="quick-key-save">Save &amp; Continue</button>
+      </div>
+    </div>`;
+    root.classList.add("open");
+
+    const input = root.querySelector("#quick-key-input");
+    const errEl = root.querySelector("#quick-key-error");
+    const saveBtn = root.querySelector("#quick-key-save");
+    const cancelBtn = root.querySelector("#quick-key-cancel");
+
+    function close(val) {
+      root.classList.remove("open");
+      resolve(val);
+    }
+
+    cancelBtn.onclick = () => close(false);
+    saveBtn.onclick = () => {
+      const val = input.value.trim();
+      if (!val) {
+        errEl.textContent = "Please paste your free Gemini API key to activate translation.";
+        errEl.style.display = "block";
+        return;
+      }
+      Settings.set({ apiKey: val });
+      toast("Gemini API key saved!");
+      close(true);
+    };
+  });
+}
+
 function nav(view, params = {}, push = true) {
   if (push && currentView) history_.push({ view: currentView, params: currentParams });
   currentView = view; currentParams = params;
@@ -199,6 +247,18 @@ async function renderPaste() {
     };
   }
 
+  const keyBanner = document.getElementById("paste-key-banner");
+  const quickKeyBtn = document.getElementById("paste-quick-key-btn");
+  if (keyBanner) {
+    keyBanner.style.display = Settings.get().apiKey ? "none" : "flex";
+  }
+  if (quickKeyBtn) {
+    quickKeyBtn.onclick = async () => {
+      const ok = await promptKeySetupModal();
+      if (ok && keyBanner) keyBanner.style.display = "none";
+    };
+  }
+
   document.getElementById("paste-translate-btn").onclick = async () => {
     const text = input.value.trim();
     if (!text) { toast("Paste some text first."); return; }
@@ -210,17 +270,13 @@ async function renderPaste() {
       sourceLang = customLangInput.value.trim() || "English";
     }
 
-    const currentKey = Settings.get().apiKey;
+    let currentKey = Settings.get().apiKey;
     if (!currentKey) {
-      const openSettings = await confirmModal(
-        "Gemini API Key Required (100% Free)",
-        "Translation requires a Gemini API key. Google provides free Gemini keys at aistudio.google.com with no payment or credit card required.\n\nWould you like to open Settings now to paste your key?",
-        "Open Settings"
-      );
-      if (openSettings) {
-        nav("settings");
-        return;
-      }
+      const configured = await promptKeySetupModal();
+      if (!configured) return;
+      currentKey = Settings.get().apiKey;
+      if (!currentKey) return;
+      if (keyBanner) keyBanner.style.display = "none";
     }
 
     await runTranslation({
@@ -272,17 +328,12 @@ async function renderUrl(params) {
     if (!text) { toast("No extracted text to translate."); return; }
     const project = await Projects.get(select.value);
 
-    const currentKey = Settings.get().apiKey;
+    let currentKey = Settings.get().apiKey;
     if (!currentKey) {
-      const openSettings = await confirmModal(
-        "Gemini API Key Required (100% Free)",
-        "Translation requires a Gemini API key. Google provides free Gemini keys at aistudio.google.com with no payment or credit card required.\n\nWould you like to open Settings now to paste your key?",
-        "Open Settings"
-      );
-      if (openSettings) {
-        nav("settings");
-        return;
-      }
+      const configured = await promptKeySetupModal();
+      if (!configured) return;
+      currentKey = Settings.get().apiKey;
+      if (!currentKey) return;
     }
 
     const urlLangSelect = document.getElementById("url-source-lang");
@@ -836,7 +887,61 @@ async function renderSettings() {
   document.getElementById("set-chunk-size").value = s.chunkSize;
   document.getElementById("set-api-base").value = s.apiBase;
   document.getElementById("set-api-model").value = s.apiModel;
-  document.getElementById("set-api-key").value = s.apiKey;
+  const keyInput = document.getElementById("set-api-key");
+  const keySavedEl = document.getElementById("set-key-saved");
+  keyInput.value = s.apiKey || "";
+
+  // Auto-save instantly as the user types or pastes the API key so it is never lost
+  keyInput.oninput = () => {
+    const val = keyInput.value.trim();
+    Settings.set({ apiKey: val });
+    if (keySavedEl) {
+      keySavedEl.style.display = "inline";
+      clearTimeout(keyInput._savedTimer);
+      keyInput._savedTimer = setTimeout(() => {
+        if (keySavedEl) keySavedEl.style.display = "none";
+      }, 2500);
+    }
+  };
+
+  const testBtn = document.getElementById("set-test-btn");
+  const testStatus = document.getElementById("set-test-status");
+  if (testBtn) {
+    testBtn.onclick = async () => {
+      const keyVal = keyInput.value.trim();
+      if (!keyVal) {
+        testStatus.textContent = "Please paste an API key first.";
+        testStatus.style.color = "var(--danger)";
+        return;
+      }
+      testStatus.textContent = "Testing key with Gemini...";
+      testStatus.style.color = "var(--ink-soft)";
+      testBtn.disabled = true;
+      try {
+        const res = await fetch("/api/test-key", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            apiKey: keyVal,
+            apiBase: document.getElementById("set-api-base").value.trim(),
+            model: document.getElementById("set-api-model").value.trim()
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          testStatus.innerHTML = `<span style="color:var(--success);font-weight:600;">✓ Connected!</span> (${data.provider || "Gemini"}: "${escapeHtml(data.sample || "")}")`;
+          Settings.set({ apiKey: keyVal });
+        } else {
+          testStatus.innerHTML = `<span style="color:var(--danger);font-weight:600;">✗ Failed:</span> ${escapeHtml(data.error || "Connection error")}`;
+        }
+      } catch (err) {
+        testStatus.innerHTML = `<span style="color:var(--danger);font-weight:600;">✗ Network error:</span> ${escapeHtml(err.message)}`;
+      } finally {
+        testBtn.disabled = false;
+      }
+    };
+  }
+
   document.getElementById("set-extract-proxy").value = s.extractProxy;
   document.getElementById("set-font-size").value = s.fontSize;
   document.getElementById("set-line-spacing").value = s.lineSpacing;

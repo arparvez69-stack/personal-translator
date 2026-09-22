@@ -87,6 +87,10 @@
         <select id="paste-project"></select>
         <button class="small-btn" id="paste-new-project">+ New</button>
       </div>
+      <div id="paste-key-banner" class="status-msg" style="display:none;background:var(--paper-raised);border:1px dashed var(--maroon);font-size:12px;margin:8px 0;align-items:center;justify-content:space-between;">
+        <span>🔑 <b>Free Gemini Key:</b> Add your free key to activate translation.</span>
+        <button class="small-btn" id="paste-quick-key-btn" style="margin-left:6px;">Setup Key</button>
+      </div>
       <div class="field-row">
         <label for="paste-source-lang">Source language</label>
         <select id="paste-source-lang">
@@ -326,8 +330,15 @@
         <div style="margin: 8px 0 14px;">
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="primary-btn" style="display:inline-block;text-align:center;text-decoration:none;font-size:13px;padding:8px 16px;">🔑 Get Free Gemini Key (aistudio.google.com) ↗</a>
         </div>
-        <label for="set-api-key">Gemini API Key</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 4px;">
+          <label for="set-api-key" style="margin:0;">Gemini API Key</label>
+          <span id="set-key-saved" style="display:none;color:var(--success);font-size:12px;font-weight:600;">✓ Saved automatically</span>
+        </div>
         <input id="set-api-key" type="password" placeholder="Paste AIzaSy… key here">
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+          <button type="button" class="small-btn" id="set-test-btn">⚡ Test Connection</button>
+          <span id="set-test-status" style="font-size:12px;color:var(--ink-soft);"></span>
+        </div>
 
         <details style="margin-top:14px;font-size:13px;color:var(--ink-soft);">
           <summary style="cursor:pointer;font-weight:500;padding:4px 0;">Optional / Advanced Providers (Claude, OpenAI, Custom)</summary>

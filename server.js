@@ -52,26 +52,33 @@ app.post("/api/translate", async (req, res) => {
       const isGoogle = key.startsWith("AIza") || base.includes("generativelanguage.googleapis.com") || (!isAnthropic && !isOpenAI);
 
       if (isGoogle) {
-        try {
-          const customAi = new GoogleGenAI({
-            apiKey: key,
-            httpOptions: { headers: { "User-Agent": "aistudio-build" } }
-          });
-          const response = await customAi.models.generateContent({
-            model: customModel || "gemini-3.8-flash",
-            contents: text,
-            config: { systemInstruction: systemPrompt }
-          });
-          const translatedText = response.text ? response.text.trim() : "";
-          return res.json({ text: translatedText, provider: "custom-gemini" });
-        } catch (gErr) {
-          let msg = gErr?.message || "Google Gemini API error.";
+        const candidateModels = customModel
+          ? [customModel]
+          : ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+        let lastErr = null;
+        for (const mod of candidateModels) {
           try {
-            const parsed = JSON.parse(msg);
-            if (parsed?.error?.message) msg = parsed.error.message;
-          } catch {}
-          return res.status(400).json({ error: { message: `Gemini API Error: ${msg}` } });
+            const customAi = new GoogleGenAI({
+              apiKey: key,
+              httpOptions: { headers: { "User-Agent": "aistudio-build" } }
+            });
+            const response = await customAi.models.generateContent({
+              model: mod,
+              contents: text,
+              config: { systemInstruction: systemPrompt }
+            });
+            const translatedText = response.text ? response.text.trim() : "";
+            return res.json({ text: translatedText, provider: "custom-gemini", model: mod });
+          } catch (gErr) {
+            lastErr = gErr;
+          }
         }
+        let msg = lastErr?.message || "Google Gemini API error.";
+        try {
+          const parsed = JSON.parse(msg);
+          if (parsed?.error?.message) msg = parsed.error.message;
+        } catch {}
+        return res.status(400).json({ error: { message: `Gemini API Error: ${msg}` } });
       }
 
       if (isAnthropic) {
@@ -226,6 +233,88 @@ app.post("/api/extract", async (req, res) => {
     return res.status(502).json({
       error: isTimeout ? "Request to the webpage timed out." : (err.message || "Failed to fetch webpage.")
     });
+  }
+});
+
+app.post("/api/test-key", async (req, res) => {
+  try {
+    const { apiKey, apiBase, model } = req.body || {};
+    const key = (apiKey || "").trim();
+    if (!key) {
+      return res.status(400).json({ ok: false, error: "Please enter an API key to test." });
+    }
+
+    const base = (apiBase || "").trim().replace(/\/+$/, "");
+    const isAnthropic = base.includes("anthropic.com") || (!base && key.startsWith("sk-ant"));
+    const isOpenAI = base.includes("openai.com") || base.includes("openrouter.ai") || base.includes("groq.com") || (!base && key.startsWith("sk-") && !key.startsWith("sk-ant"));
+    const isGoogle = key.startsWith("AIza") || base.includes("generativelanguage.googleapis.com") || (!isAnthropic && !isOpenAI);
+
+    if (isGoogle) {
+      const candidateModels = model ? [model] : ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+      let lastErr = null;
+      for (const m of candidateModels) {
+        try {
+          const customAi = new GoogleGenAI({
+            apiKey: key,
+            httpOptions: { headers: { "User-Agent": "aistudio-build" } }
+          });
+          const response = await customAi.models.generateContent({
+            model: m,
+            contents: "Translate this single greeting into Bangla: Hello"
+          });
+          const translatedText = response.text ? response.text.trim() : "";
+          return res.json({ ok: true, provider: "Google Gemini", model: m, sample: translatedText });
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      let msg = lastErr?.message || "Gemini API test failed.";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.error?.message) msg = parsed.error.message;
+      } catch {}
+      return res.status(400).json({ ok: false, error: msg });
+    }
+
+    if (isAnthropic) {
+      const aRes = await fetch(`${base || "https://api.anthropic.com"}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify({
+          model: model || "claude-sonnet-4-6",
+          max_tokens: 50,
+          messages: [{ role: "user", content: "Translate Hello into Bangla" }]
+        })
+      });
+      const aData = await aRes.json();
+      if (!aRes.ok) return res.status(400).json({ ok: false, error: aData?.error?.message || "Anthropic error" });
+      const txt = aData.content?.[0]?.text?.trim() || "";
+      return res.json({ ok: true, provider: "Anthropic", model: model || "claude-sonnet-4-6", sample: txt });
+    }
+
+    // OpenAI compatible
+    const openAiEndpoint = base.endsWith("/chat/completions") ? base : `${base || "https://api.openai.com/v1"}/chat/completions`;
+    const oRes = await fetch(openAiEndpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "authorization": `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: model || "gpt-4o",
+        messages: [{ role: "user", content: "Translate Hello into Bangla" }]
+      })
+    });
+    const oData = await oRes.json();
+    if (!oRes.ok) return res.status(400).json({ ok: false, error: oData?.error?.message || "API error" });
+    const txt = oData.choices?.[0]?.message?.content?.trim() || "";
+    return res.json({ ok: true, provider: "OpenAI-compatible", model: model || "gpt-4o", sample: txt });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || "Connection failed." });
   }
 });
 
