@@ -20,25 +20,55 @@ function fmtDate(ts) {
 }
 
 function formModal(title, fields) {
-  // fields: [{key, label, placeholder, value}]
+  // fields: [{key, label, placeholder, value, options}]
   return new Promise((resolve) => {
     const root = document.getElementById("modal-root");
     root.innerHTML = `<div class="modal-sheet">
       <h3>${escapeHtml(title)}</h3>
-      ${fields.map((f) => `<label style="display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px;">${escapeHtml(f.label)}</label>
-        <input data-key="${f.key}" placeholder="${escapeHtml(f.placeholder || "")}" value="${escapeHtml(f.value || "")}">`).join("")}
+      ${fields.map((f) => {
+        const lbl = `<label style="display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px;">${escapeHtml(f.label)}</label>`;
+        if (f.options && f.options.length) {
+          const opts = f.options.map((o) => {
+            const val = typeof o === "object" ? o.value : o;
+            const label = typeof o === "object" ? o.label : o;
+            const sel = val === f.value ? " selected" : "";
+            return `<option value="${escapeHtml(val)}"${sel}>${escapeHtml(label)}</option>`;
+          }).join("");
+          return `${lbl}<select data-key="${f.key}" style="width:100%;padding:10px 12px;border-radius:var(--radius);border:1px solid var(--line);background:var(--paper-raised);color:var(--ink);">${opts}</select>`;
+        }
+        return `${lbl}<input data-key="${f.key}" placeholder="${escapeHtml(f.placeholder || "")}" value="${escapeHtml(f.value || "")}">`;
+      }).join("")}
       <div class="btn-row">
         <button class="ghost-btn" id="modal-cancel">Cancel</button>
         <button class="primary-btn" id="modal-ok">Save</button>
       </div>
     </div>`;
     root.classList.add("open");
-    root.querySelector("#modal-cancel").onclick = () => { root.classList.remove("open"); resolve(null); };
+
+    function close(val) {
+      root.classList.remove("open");
+      root.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKey);
+      resolve(val);
+    }
+    function onBackdrop(e) {
+      if (e.target === root) close(null);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close(null);
+    }
+
+    root.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKey);
+
+    root.querySelector("#modal-cancel").onclick = () => close(null);
     root.querySelector("#modal-ok").onclick = () => {
       const out = {};
-      fields.forEach((f) => { out[f.key] = root.querySelector(`[data-key="${f.key}"]`).value.trim(); });
-      root.classList.remove("open");
-      resolve(out);
+      fields.forEach((f) => {
+        const inputEl = root.querySelector(`[data-key="${f.key}"]`);
+        out[f.key] = inputEl ? inputEl.value.trim() : "";
+      });
+      close(out);
     };
   });
 }
@@ -120,9 +150,7 @@ async function fillProjectSelect(selectEl, selectedId) {
 async function ensureAtLeastOneProject() {
   const projects = await Projects.all();
   if (projects.length) return projects[0].id;
-  const name = await promptModal("Name your first project", "e.g. The Lighthouse — Bangla");
-  if (!name) return null;
-  const p = await Projects.create(name);
+  const p = await Projects.create("My Novel Project");
   return p.id;
 }
 
@@ -332,7 +360,7 @@ async function runTranslation({ text, projectId, sourceLang, targetLang, mode, p
   wrap.hidden = false;
   document.getElementById(resultWrap).hidden = true;
 
-  const { results, failedIndices } = await translateChunks(chunks, { mode, sourceLang, targetLang }, (p) => {
+  const { results, failedIndices } = await translateChunks(chunks, { mode, sourceLang, targetLang, glossary }, (p) => {
     const pct = Math.round(((p.index + (p.status === "done" || p.status === "failed" ? 1 : 0)) / p.total) * 100);
     fill.style.width = pct + "%";
     txt.textContent = p.status === "failed"
@@ -372,7 +400,7 @@ async function runTranslation({ text, projectId, sourceLang, targetLang, mode, p
     btn.onclick = async () => {
       for (const idx of [...failedIndices]) {
         try {
-          const r = await retryChunk(chunks, idx, { mode, sourceLang, targetLang });
+          const r = await retryChunk(chunks, idx, { mode, sourceLang, targetLang, glossary });
           results[idx] = r;
           failedIndices.splice(failedIndices.indexOf(idx), 1);
         } catch (err) { toast(`Retry failed: ${err.message}`); }
@@ -449,13 +477,27 @@ function resetResultBlock(stateKey) {
 
 function openReadNow(title, translatedText) {
   const root = document.getElementById("modal-root");
-  root.innerHTML = `<div class="modal-sheet" style="max-height:80vh;overflow-y:auto;">
+  root.innerHTML = `<div class="modal-sheet" style="max-height:85vh;overflow-y:auto;">
     <h3>${escapeHtml(title)}</h3>
     <div class="reading-content" style="font-size:18px;">${escapeHtml(translatedText)}</div>
     <div class="btn-row"><button class="primary-btn" id="modal-close">Close</button></div>
   </div>`;
   root.classList.add("open");
-  root.querySelector("#modal-close").onclick = () => root.classList.remove("open");
+
+  function close() {
+    root.classList.remove("open");
+    root.removeEventListener("click", onBackdrop);
+    window.removeEventListener("keydown", onKey);
+  }
+  function onBackdrop(e) {
+    if (e.target === root) close();
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+  }
+  root.addEventListener("click", onBackdrop);
+  window.addEventListener("keydown", onKey);
+  root.querySelector("#modal-close").onclick = close;
 }
 
 /* ---------------- Projects list + detail ---------------- */
@@ -503,7 +545,17 @@ async function renderProjectDetail(params) {
   modeSel.onchange = () => Projects.update(project.id, { mode: modeSel.value });
 
   document.getElementById("pd-export-btn").onclick = async () => {
-    const choice = await formModal("Export project", [{ key: "format", label: "Format: json / txt / md / html", placeholder: "json", value: "json" }]);
+    const choice = await formModal("Export project", [{
+      key: "format",
+      label: "Export Format",
+      value: "json",
+      options: [
+        { label: "JSON (Complete Project & Glossary)", value: "json" },
+        { label: "TXT (Clean Plain Text)", value: "txt" },
+        { label: "Markdown (.md Chapters)", value: "md" },
+        { label: "HTML (Formatted Bengali eBook)", value: "html" }
+      ]
+    }]);
     if (!choice) return;
     const parts = await Parts.listByProject(project.id);
     const fmt = (choice.format || "json").toLowerCase();
@@ -587,10 +639,25 @@ async function editPart(part, onDone) {
     </div>
   </div>`;
   root.classList.add("open");
-  root.querySelector("#ep-cancel").onclick = () => root.classList.remove("open");
+
+  function close() {
+    root.classList.remove("open");
+    root.removeEventListener("click", onBackdrop);
+    window.removeEventListener("keydown", onKey);
+  }
+  function onBackdrop(e) {
+    if (e.target === root) close();
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+  }
+  root.addEventListener("click", onBackdrop);
+  window.addEventListener("keydown", onKey);
+
+  root.querySelector("#ep-cancel").onclick = close;
   root.querySelector("#ep-save").onclick = async () => {
     await Parts.update(part.id, { title: root.querySelector("#ep-title").value.trim() || part.title, translatedText: root.querySelector("#ep-text").value });
-    root.classList.remove("open");
+    close();
     toast("Saved.");
     onDone?.();
   };
@@ -602,7 +669,6 @@ async function renderReading(params) {
   const projSel = document.getElementById("reading-project");
   const partSel = document.getElementById("reading-part");
   const content = document.getElementById("reading-content");
-  const s = Settings.get();
 
   await fillProjectSelect(projSel, params?.projectId);
 
@@ -616,12 +682,13 @@ async function renderReading(params) {
     if (!partSel.value) { content.textContent = "No parts in this project yet."; return; }
     const part = await Parts.get(partSel.value);
     content.textContent = part?.translatedText || "";
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
   projSel.onchange = () => loadParts();
   partSel.onchange = showPart;
   await loadParts(params?.partId);
 
-  document.getElementById("reading-font-minus").onclick = () => { const v = Settings.set({ fontSize: Math.max(14, s.fontSize - 1) }); };
+  document.getElementById("reading-font-minus").onclick = () => { Settings.set({ fontSize: Math.max(14, Settings.get().fontSize - 1) }); };
   document.getElementById("reading-font-plus").onclick = () => { Settings.set({ fontSize: Math.min(32, Settings.get().fontSize + 1) }); };
   document.getElementById("reading-line-minus").onclick = () => { Settings.set({ lineSpacing: Math.max(1.2, +(Settings.get().lineSpacing - 0.1).toFixed(1)) }); };
   document.getElementById("reading-line-plus").onclick = () => { Settings.set({ lineSpacing: Math.min(2.4, +(Settings.get().lineSpacing + 0.1).toFixed(1)) }); };

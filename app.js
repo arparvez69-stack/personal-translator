@@ -138,13 +138,16 @@ const Settings = {
 };
 
 function applyTheme(theme) {
-  document.body.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+  const t = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", t);
+  document.body.setAttribute("data-theme", t);
 }
 
 /* ---------------- Toast / Modal helpers ---------------- */
 
 function toast(msg, ms = 2600) {
   const root = document.getElementById("toast-root");
+  if (!root) return;
   const el = document.createElement("div");
   el.className = "toast";
   el.textContent = msg;
@@ -164,8 +167,25 @@ function confirmModal(title, body, confirmLabel = "Confirm") {
       </div>
     </div>`;
     root.classList.add("open");
-    root.querySelector("#modal-cancel").onclick = () => { root.classList.remove("open"); resolve(false); };
-    root.querySelector("#modal-confirm").onclick = () => { root.classList.remove("open"); resolve(true); };
+
+    function close(val) {
+      root.classList.remove("open");
+      root.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKey);
+      resolve(val);
+    }
+
+    function onBackdrop(e) {
+      if (e.target === root) close(false);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close(false);
+    }
+
+    root.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKey);
+    root.querySelector("#modal-cancel").onclick = () => close(false);
+    root.querySelector("#modal-confirm").onclick = () => close(true);
   });
 }
 
@@ -183,8 +203,25 @@ function promptModal(title, placeholder = "", initial = "") {
     root.classList.add("open");
     const input = root.querySelector("#modal-input");
     input.focus();
-    root.querySelector("#modal-cancel").onclick = () => { root.classList.remove("open"); resolve(null); };
-    root.querySelector("#modal-ok").onclick = () => { root.classList.remove("open"); resolve(input.value.trim()); };
+
+    function close(val) {
+      root.classList.remove("open");
+      root.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKey);
+      resolve(val);
+    }
+
+    function onBackdrop(e) {
+      if (e.target === root) close(null);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") close(null);
+    }
+
+    root.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKey);
+    root.querySelector("#modal-cancel").onclick = () => close(null);
+    root.querySelector("#modal-ok").onclick = () => close(input.value.trim());
   });
 }
 

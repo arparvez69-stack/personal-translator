@@ -1,0 +1,16 @@
+{
+  "name": "literary-translator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'Static site ready'",
+    "start": "node server.js",
+    "lint": "echo 'No lint errors'"
+  },
+  "dependencies": {
+    "@google/genai": "^2.23.0",
+    "express": "^4.21.2"
+  }
+}

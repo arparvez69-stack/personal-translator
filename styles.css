@@ -27,7 +27,9 @@
   }
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+[data-theme="dark"],
+body[data-theme="dark"] {
   --paper: #1B1712;
   --paper-raised: #241F19;
   --ink: #ECE3D4;
@@ -243,4 +245,22 @@ button { font-family: var(--font-ui); cursor: pointer; }
 
 @media (min-width: 480px) {
   .grid-actions { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+@media (min-width: 680px) {
+  .modal-sheet {
+    border-radius: 16px;
+    margin: auto 20px;
+  }
+  #modal-root.open {
+    align-items: center;
+  }
+  .dual-pane[data-mode="both"] {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .dual-pane[data-mode="both"] .pane {
+    flex: 1;
+    min-width: 0;
+  }
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bangla Translator">
 <title>Literary Translator</title>
+<meta name="description" content="Offline-first Bangla literary novel translator PWA for translating fiction into natural, emotionally faithful Bangla.">
+<meta property="og:title" content="Literary Translator">
+<meta property="og:description" content="Offline-first Bangla literary novel translator PWA for translating fiction into natural, emotionally faithful Bangla.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="styles.css">
@@ -278,19 +281,19 @@
       </div>
 
       <div class="settings-group">
-        <h3>AI Provider</h3>
-        <p class="hint">Your API key is stored only in this browser's local storage and sent directly to the provider. It is never bundled into the app or sent anywhere else.</p>
-        <label>API base URL</label>
+        <h3>AI Engine</h3>
+        <p class="hint">The built-in Gemini AI engine translates novels into natural Bangla. Custom provider settings below are optional.</p>
+        <label>API base URL (optional)</label>
         <input id="set-api-base" placeholder="https://api.anthropic.com">
-        <label>Model</label>
+        <label>Model (optional)</label>
         <input id="set-api-model" placeholder="claude-sonnet-4-6">
-        <label>API key</label>
-        <input id="set-api-key" type="password" placeholder="sk-ant-…">
+        <label>Custom API key (optional)</label>
+        <input id="set-api-key" type="password" placeholder="Leave empty for built-in Gemini engine">
       </div>
 
       <div class="settings-group">
         <h3>Webpage Extraction</h3>
-        <p class="hint">Most sites block cross-origin browser access (CORS) — this is a browser security feature the app will never try to bypass. If a page fails to load automatically, use Paste Mode instead. If you run your own extraction server that you're authorized to use, you can point to it here as an optional fallback.</p>
+        <p class="hint">Novel pages and chapters are fetched automatically via the built-in reader proxy. If you run a custom extraction proxy, you can optionally configure it here.</p>
         <label>Extraction proxy URL (optional)</label>
         <input id="set-extract-proxy" placeholder="https://your-own-server.example/extract">
       </div>

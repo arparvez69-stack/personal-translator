@@ -74,23 +74,36 @@ function extractTitle(doc) {
 function nodeToText(node) {
   // Preserve paragraph breaks and headings; collapse inline whitespace.
   const blocks = [];
-  const blockTags = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "BLOCKQUOTE", "DIV", "BR"]);
+  const leafBlockTags = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "LI", "BLOCKQUOTE", "PRE"]);
+
   function walk(el) {
-    if (el.nodeType === Node.TEXT_NODE) return;
-    if (el.tagName === "BR") { blocks.push(""); return; }
-    if (blockTags.has(el.tagName)) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return;
+    if (el.tagName === "BR") {
+      blocks.push("");
+      return;
+    }
+    if (leafBlockTags.has(el.tagName)) {
       const t = (el.textContent || "").replace(/\s+/g, " ").trim();
       if (t) blocks.push(t);
-      return; // don't descend further into block-level text we've already captured
+      return;
     }
-    for (const child of el.children) walk(child);
+    // Check if this container contains any child leaf blocks or other containers
+    const hasChildBlocks = el.querySelector("p, h1, h2, h3, h4, h5, h6, li, blockquote, div, br");
+    if (hasChildBlocks) {
+      for (const child of el.children) {
+        walk(child);
+      }
+    } else {
+      const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+      if (t) blocks.push(t);
+    }
   }
-  if (node.children.length === 0) {
-    return (node.textContent || "").trim();
+
+  walk(node);
+  if (blocks.length === 0) {
+    return (node.textContent || "").replace(/\s+/g, " ").trim();
   }
-  for (const child of node.children) walk(child);
-  if (blocks.length === 0) return (node.textContent || "").replace(/[ \t]+/g, " ").trim();
-  return blocks.join("\n\n");
+  return blocks.filter((b, idx, arr) => b.length > 0 || (idx > 0 && arr[idx - 1].length > 0)).join("\n\n");
 }
 
 function findNextChapterLink(doc, baseUrl) {
@@ -116,9 +129,7 @@ function detectLanguage(text) {
 }
 
 /**
- * Attempt Layer 1/2 (direct browser fetch + DOM extraction). Throws on failure
- * (CORS block, network error, non-OK response) — callers must catch and fall
- * back to Paste Mode; this function never attempts to bypass access controls.
+ * Attempt Layer 1 (direct browser fetch + DOM extraction). Throws on CORS/network failure.
  */
 async function extractFromUrlDirect(url) {
   const res = await fetch(url, { credentials: "omit", mode: "cors" });
@@ -136,7 +147,37 @@ async function extractFromUrlDirect(url) {
   };
 }
 
-/** Layer 3: optional user-configured extraction proxy (must be one the user is authorized to use). */
+/** Layer 2: built-in server-side fetch proxy that securely fetches HTML without CORS restriction. */
+async function extractFromUrlViaServer(url) {
+  const res = await fetch("/api/extract", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url })
+  });
+  if (!res.ok) {
+    let errMsg = `Extraction error (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.error) errMsg = body.error;
+    } catch { /* ignore */ }
+    throw new Error(errMsg);
+  }
+  const data = await res.json();
+  const html = data.html;
+  if (!html) throw new Error("No readable HTML received from extraction service.");
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const contentNode = findBestContentNode(doc);
+  const text = nodeToText(contentNode);
+  if (!text || text.length < 50) throw new Error("No substantial readable content found on this page.");
+  return {
+    title: extractTitle(doc),
+    text,
+    language: detectLanguage(text),
+    nextChapter: findNextChapterLink(doc, data.url || url)
+  };
+}
+
+/** Layer 3: optional user-configured external extraction proxy. */
 async function extractFromUrlViaProxy(url) {
   const s = Settings.get();
   if (!s.extractProxy) throw new Error("No extraction proxy configured.");
@@ -157,31 +198,38 @@ async function extractFromUrlViaProxy(url) {
 }
 
 /**
- * Full extraction pipeline: try direct browser access first, then the
- * optional proxy if configured. Never attempts anything beyond ordinary,
- * unauthenticated, browser-accessible content.
+ * Full extraction pipeline: try direct browser fetch, then server proxy,
+ * then custom user proxy if configured.
  */
 async function extractFromUrl(url) {
+  const errors = [];
   try {
     return await extractFromUrlDirect(url);
   } catch (directErr) {
-    const s = Settings.get();
-    if (s.extractProxy) {
-      try {
-        return await extractFromUrlViaProxy(url);
-      } catch (proxyErr) {
-        throw new Error(
-          `Automatic page reading was not possible. The website may restrict browser access (${directErr.message}). ` +
-          `The configured extraction proxy also failed: ${proxyErr.message}. Please use Paste Mode.`
-        );
-      }
-    }
-    throw new Error(
-      `Automatic page reading was not possible. The website may restrict direct browser access to its content ` +
-      `(reason: ${directErr.message}). This is a browser security restriction (CORS) that this app will not attempt ` +
-      `to bypass. Please use Paste Mode instead.`
-    );
+    errors.push(`Direct browser access: ${directErr.message}`);
   }
+
+  // Try server proxy
+  try {
+    return await extractFromUrlViaServer(url);
+  } catch (serverErr) {
+    errors.push(`Server reader: ${serverErr.message}`);
+  }
+
+  // If custom proxy configured, try it
+  const s = Settings.get();
+  if (s.extractProxy) {
+    try {
+      return await extractFromUrlViaProxy(url);
+    } catch (proxyErr) {
+      errors.push(`Custom proxy: ${proxyErr.message}`);
+    }
+  }
+
+  throw new Error(
+    `Automatic page reading was not possible (${errors.join("; ")}). ` +
+    `You can copy the chapter text from the website and use Paste Mode instead.`
+  );
 }
 
 window.LT.Extraction = { extractFromUrl, detectLanguage };

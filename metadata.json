@@ -1,0 +1,6 @@
+{
+  "name": "Literary Translator",
+  "description": "Offline-first Bangla literary novel translator PWA for translating fiction into natural, emotionally faithful Bangla.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

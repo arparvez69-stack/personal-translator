@@ -108,39 +108,33 @@ Never generate or transform sexual content involving minors, under any framing.`
 
 async function callModel(systemPrompt, userText) {
   const s = Settings.get();
-  if (!s.apiKey) {
-    throw new Error("No API key configured. Add one in Settings before translating.");
-  }
-  const base = (s.apiBase || "https://api.anthropic.com").replace(/\/+$/, "");
-  const res = await fetch(`${base}/v1/messages`, {
+  const res = await fetch("/api/translate", {
     method: "POST",
     headers: {
-      "content-type": "application/json",
-      "x-api-key": s.apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
+      "content-type": "application/json"
     },
     body: JSON.stringify({
-      model: s.apiModel || "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userText }]
+      text: userText,
+      systemPrompt,
+      customApiKey: s.apiKey || "",
+      customApiBase: s.apiBase || "",
+      customModel: s.apiModel || ""
     })
   });
+
   if (!res.ok) {
     let msg = `Translation service error (${res.status})`;
     try {
       const body = await res.json();
       if (body?.error?.message) msg = body.error.message;
+      else if (body?.error) msg = body.error;
     } catch { /* ignore */ }
     throw new Error(msg);
   }
+
   const data = await res.json();
-  const text = (data.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-  return text.trim();
+  const text = (data.text || "").trim();
+  return text;
 }
 
 /**
